@@ -14,6 +14,9 @@ import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -22,6 +25,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.view.FlutterNativeView;
+import tv.mta.flutter_playout.MediaItem;
 import tv.mta.flutter_playout.MediaNotificationManagerService;
 
 public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
@@ -37,6 +41,9 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
     private Activity activity;
 
     private Context context;
+
+    private ArrayList<MediaItem> mediaQueue = new ArrayList<MediaItem>();
+    private int currentMediaIndex = 0;
 
     private String audioURL;
 
@@ -98,6 +105,10 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             audioServiceBinder.setAudioProgressUpdateHandler(audioProgressUpdateHandler);
 
             audioServiceBinder.startAudio(startPositionInMills);
+
+            audioServiceBinder.setQueue(mediaQueue);
+
+            audioServiceBinder.setPlayIndex(currentMediaIndex);
 
             doBindMediaNotificationManagerService();
         }
@@ -277,6 +288,23 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
         }
     }
 
+    private void notifyDartOnPlayQueueItem(int index)
+    {
+        try {
+
+            JSONObject message = new JSONObject();
+
+            message.put("name", "onPlayQueueItem");
+            message.put("index", index);
+
+            eventSink.success(message);
+
+        } catch (Exception e) {
+
+            Log.e(TAG, "notifyDartOnPlayQueueItem: ", e);
+        }
+    }
+
     private void notifyDartOnComplete() {
 
         try {
@@ -322,6 +350,56 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             if (audioServiceBinder != null && position != null) {
 
                 audioServiceBinder.seekAudio(position.intValue());
+            }
+
+        } catch (Exception e) {
+
+            notifyDartOnError(e.getMessage());
+        }
+    }
+
+    private void setQueue(Object arguments) {
+        try {
+
+            java.util.HashMap<String, Object> args = (java.util.HashMap<String, Object>) arguments;
+
+            ArrayList<Object> items = (ArrayList<Object>) args.get("queue");
+            Log.d(TAG, "set queue: " + items.size());
+            ArrayList<MediaItem> queue = new ArrayList<>();
+            for (Object o : items) {
+                HashMap<String, Object> item = (HashMap<String, Object>) o;
+                Log.d(TAG, item.toString());
+                queue.add(new MediaItem(
+                        (String)item.get("title"),
+                        (String)item.get("subtitle"),
+                        (String)item.get("url"),
+                        (String)item.get("author"))
+                );
+            }
+            Log.d(TAG, "did set queue: " + queue.size());
+
+            mediaQueue = queue;
+            currentMediaIndex = (int) args.get("currentIndex");
+
+            if (audioServiceBinder != null) {
+                audioServiceBinder.setQueue(queue);
+                audioServiceBinder.setPlayIndex(currentMediaIndex);
+            }
+
+        } catch (Exception e) {
+
+            notifyDartOnError(e.getMessage());
+        }
+    }
+
+    private void updatePlayIndex(Object arguments)
+    {
+        try {
+
+            java.util.HashMap<String, Object> args = (java.util.HashMap<String, Object>) arguments;
+            currentMediaIndex = (int) args.get("index");
+            if (audioServiceBinder != null) {
+                audioServiceBinder.setPlayIndex(currentMediaIndex);
             }
 
         } catch (Exception e) {
@@ -411,6 +489,14 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                 result.success(true);
                 break;
             }
+            case "updatePlayIndex":
+                updatePlayIndex(call.arguments);
+                result.success(true);
+                break;
+            case "setQueue":
+                setQueue(call.arguments);
+                result.success(true);
+                break;
             case "dispose": {
                 onDestroy();
                 result.success(true);
@@ -494,6 +580,10 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
                     service.onDuration();
 
+                } else if (msg.what == service.audioServiceBinder.UPDATE_AUDIO) {
+
+                    int index = msg.arg1;
+                    service.notifyDartOnPlayQueueItem(index);
                 }
             }
         }

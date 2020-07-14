@@ -30,6 +30,18 @@ public class RemoteReceiver extends BroadcastReceiver {
                             AudioServiceBinder.service.startAudio(0);
 
                             break;
+
+                        case KeyEvent.KEYCODE_MEDIA_NEXT:
+
+                            AudioServiceBinder.service.nextTrack();
+
+                            break;
+
+                        case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+
+                            AudioServiceBinder.service.prevTrack();
+
+                            break;
                     }
                 }
             }

@@ -22,8 +22,11 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import tv.mta.flutter_playout.FlutterAVPlayer;
+import tv.mta.flutter_playout.MediaItem;
 import tv.mta.flutter_playout.PlayerNotificationUtil;
 import tv.mta.flutter_playout.PlayerState;
 import tv.mta.flutter_playout.R;
@@ -55,6 +58,8 @@ public class AudioServiceBinder
     final int UPDATE_PLAYER_STATE_TO_COMPLETE = 4;
     final int UPDATE_AUDIO_DURATION = 5;
     final int UPDATE_PLAYER_STATE_TO_ERROR = 6;
+    final int UPDATE_AUDIO = 7;
+
     private boolean isPlayerReady = false;
     private boolean isBound = true;
 
@@ -64,6 +69,9 @@ public class AudioServiceBinder
      * Whether the {@link MediaPlayer} broadcasted an error.
      */
     private boolean mReceivedError;
+
+    private ArrayList<MediaItem> mediaQueue = new ArrayList<MediaItem>();
+    private int currentMediaIndex = 0;
 
     private String audioFileUrl = "";
 
@@ -190,6 +198,56 @@ public class AudioServiceBinder
             // Send the message to caller activity's update audio Handler object.
             audioProgressUpdateHandler.sendMessage(updateAudioProgressMsg);
         }
+    }
+
+    void setQueue(ArrayList<MediaItem> queue)
+    {
+        Log.d(TAG, "set media queue: " + queue.size());
+        mediaQueue = queue;
+    }
+
+    void setPlayIndex(int index)
+    {
+        Log.d(TAG, "set media index: " + index);
+        currentMediaIndex = index;
+    }
+
+    void nextTrack() {
+        if (audioPlayer != null) {
+            if (mediaQueue.size() - 1 > currentMediaIndex) {
+                playQueueItemAtIndex(currentMediaIndex + 1);
+            }
+        }
+    }
+
+    void prevTrack() {
+        if (audioPlayer != null) {
+            if (currentMediaIndex > 0) {
+                playQueueItemAtIndex(currentMediaIndex - 1);
+            }
+        }
+    }
+
+    void playQueueItemAtIndex(int index) {
+        try {
+            reset();
+
+        } catch (Exception e) { /* ignore */}
+
+        setMediaChanging(true);
+        setPlayIndex(index);
+
+        MediaItem item = mediaQueue.get(index);
+        setAudioFileUrl(item.url);
+        setTitle(item.title);
+        setSubtitle(item.subtitle);
+        startAudio(0);
+
+        // update audio
+        Message updateAudioMsg = new Message();
+        updateAudioMsg.what = UPDATE_AUDIO;
+        updateAudioMsg.arg1 = index;
+        audioProgressUpdateHandler.sendMessage(updateAudioMsg);
     }
 
     void reset() {
@@ -520,6 +578,15 @@ public class AudioServiceBinder
                 break;
         }
 
+        Log.d(TAG, "should support capabilities: " + mediaQueue.size() + " > 0");
+        if (mediaQueue.size() > 0) {
+            if (!mReceivedError) {
+                Log.d(TAG, "add capabilities: skip next, skip prev");
+                capabilities |= PlaybackStateCompat.ACTION_SKIP_TO_NEXT
+                        | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS;
+            }
+        }
+
         return capabilities;
     }
 
@@ -533,6 +600,11 @@ public class AudioServiceBinder
         NotificationCompat.Builder notificationBuilder = PlayerNotificationUtil.from(
                 activity, context, mMediaSessionCompat, mNotificationChannelId);
 
+        if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS) != 0) {
+            notificationBuilder.addAction(R.drawable.ic_skip_prev, "Skip to Previous",
+                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS));
+        }
+
         if ((capabilities & PlaybackStateCompat.ACTION_PAUSE) != 0) {
             notificationBuilder.addAction(R.drawable.ic_pause, "Pause",
                     PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PAUSE));
@@ -541,6 +613,11 @@ public class AudioServiceBinder
         if ((capabilities & PlaybackStateCompat.ACTION_PLAY) != 0) {
             notificationBuilder.addAction(R.drawable.ic_play, "Play",
                     PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PLAY));
+        }
+
+        if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_NEXT) != 0) {
+            notificationBuilder.addAction(R.drawable.ic_skip_next, "Skip to Next",
+                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_NEXT));
         }
 
         NotificationManager notificationManager = (NotificationManager)

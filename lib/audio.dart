@@ -1,9 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// See [play] method as well as example app on how to use.
 class Audio {
-  static const MethodChannel _audioChannel =
-      MethodChannel('tv.mta/NativeAudioChannel');
+  static const MethodChannel _audioChannel = MethodChannel('tv.mta/NativeAudioChannel');
 
   Audio._();
 
@@ -31,7 +31,8 @@ class Audio {
       {String title = "",
       String subtitle = "",
       Duration position = Duration.zero,
-      bool isLiveStream = false}) async {
+      bool isLiveStream = false,
+      double updateInterval = 1.0}) async {
     if (_hasDataChanged(url, title, subtitle, position, isLiveStream)) {
       this._url = url;
       this._title = title;
@@ -44,12 +45,12 @@ class Audio {
         "subtitle": subtitle,
         "position": position.inMilliseconds,
         "isLiveStream": isLiveStream,
+        "updateInterval": updateInterval ?? 1.0
       });
     }
   }
 
-  bool _hasDataChanged(String url, String title, String subtitle,
-      Duration position, bool isLiveStream) {
+  bool _hasDataChanged(String url, String title, String subtitle, Duration position, bool isLiveStream) {
     return this._url != url ||
         this._title != title ||
         this._subtitle != subtitle ||
@@ -65,6 +66,15 @@ class Audio {
     return _audioChannel.invokeMethod("reset");
   }
 
+  Future<void> updatePlayIndex(int index) async {
+    return _audioChannel.invokeMethod('updatePlayIndex', {'index': index});
+  }
+
+  Future<void> setQueue({List<MediaItem> items, int index = 0}) async {
+    return _audioChannel.invokeMethod(
+        'setQueue', {'queue': items.map((MediaItem item) => item.toMap()).toList(), 'currentIndex': index});
+  }
+
   Future<void> seekTo(double seconds) async {
     return _audioChannel.invokeMethod("seekTo", <String, dynamic>{
       "second": seconds,
@@ -74,5 +84,18 @@ class Audio {
   Future<void> dispose() async {
     _instance = null;
     await _audioChannel.invokeMethod("dispose");
+  }
+}
+
+class MediaItem {
+  final String title;
+  final String subtitle;
+  final String author;
+  final String url;
+
+  MediaItem({this.title, this.subtitle, this.author, @required this.url});
+
+  Map<String, dynamic> toMap() {
+    return {'url': url, 'title': title ?? '', 'author': author ?? ''};
   }
 }

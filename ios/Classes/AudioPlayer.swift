@@ -52,8 +52,10 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                           if let position = arguments["position"] as? Double {
                             
                             if let isLiveStream = arguments["isLiveStream"] as? Bool {
-                                
-                                setup(title: title, subtitle: subtitle, position: position, url: audioURL, isLiveStream: isLiveStream)
+                            
+                                if let updateInterval = arguments["updateInterval"] as? Double {
+                                    setup(title: title, subtitle: subtitle, position: position, url: audioURL, isLiveStream: isLiveStream, updateInterval: updateInterval)
+                                }
                             }
                           }
                       }
@@ -93,6 +95,31 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
           
           result(true)
       }
+      
+      else if ("setQueue" == call.method) {
+      
+        if let arguments = call.arguments as? NSDictionary {
+            if let queue = arguments["queue"] as? NSArray {
+                if let currentIndex = arguments["currentIndex"] as? Int {
+                    var mediaItems: [MediaItem] = []
+                    for item in (queue as NSArray as! [NSDictionary]) {
+                        mediaItems.append(MediaItem.fromDictionary(dict: item));
+                    }
+                    setQueue(queue: mediaItems, currentIndex: currentIndex)
+                }
+            }
+        }
+      
+        result(true)
+      } else if ("updatePlayIndex" == call.method) {
+      
+        if let arguments = call.arguments as? NSDictionary {
+            if let index = arguments["index"] as? Int {
+                updatePlayIndex(index: index)
+            }
+        }
+        result(true)
+      }
         
         /* stop audio playback */
         else if ("dispose" == call.method) {
@@ -101,14 +128,43 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
             
             result(true)
         }
+        
           
       /* not implemented yet */
       else { result(FlutterMethodNotImplemented) }
     }
     
+    class MediaItem {
+        var url: String;
+        var title: String;
+        var subtitle: String;
+        var author: String;
+        
+        private init(url: String, title: String?, subtitle: String?, author: String?) {
+            self.url = url
+            self.title = title ?? ""
+            self.subtitle = subtitle ?? ""
+            self.author = title ?? ""
+        }
+        
+        static func fromDictionary(dict: NSDictionary) -> MediaItem {
+            return MediaItem(
+                url: dict["url"] as! String,
+                title: dict["title"] as? String ?? "",
+                subtitle: dict["subtitle"] as? String ?? "",
+                author: dict["author"] as? String ?? ""
+            );
+        }
+    }
+    
     private override init() { }
     
     private var audioPlayer = AVPlayer()
+    
+    private var mediaQueue: [MediaItem] = []
+    private var currentMediaIndex: Int = 0
+    private var updateInterval: Double = 1.0
+    private var isRemoteTransportControlsDidSetup: Bool = false
     
     private var timeObserverToken:Any?
     
@@ -122,7 +178,12 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private var mediaURL = ""
     
-    private func setup(title:String, subtitle:String, position:Double, url: String?, isLiveStream:Bool) {
+    private func setQueue(queue: [MediaItem], currentIndex: Int) {
+        mediaQueue = queue;
+        currentMediaIndex = currentIndex;
+    }
+    
+    private func setup(title:String, subtitle:String, position:Double, url: String?, isLiveStream:Bool, updateInterval:Double = 1.0) {
 
         do {
             let audioSession = AVAudioSession.sharedInstance()
@@ -162,7 +223,12 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                         self.audioPlayer.addObserver(self, forKeyPath: #keyPath(AVPlayerItem.status), options:[.old, .new, .initial], context: nil)
                         self.audioPlayer.addObserver(self, forKeyPath: #keyPath(AVPlayer.timeControlStatus), options:[.old, .new, .initial], context: nil)
                         
-                        let interval = CMTime(seconds: 1.0,
+                        if self.updateInterval != updateInterval {
+                            // update interval as default
+                            self.updateInterval = updateInterval
+                        }
+                        
+                        let interval = CMTime(seconds: updateInterval,
                         preferredTimescale: CMTimeScale(NSEC_PER_SEC))
                         
                         timeObserverToken = audioPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
@@ -185,6 +251,19 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         if (!validPlaybackUrl) {
             pause()
         }
+    }
+    
+    private func playQueueItem(index: Int) {
+        if index >= 0 && mediaQueue.count - 1 > index {
+            let item = mediaQueue[index]
+            setup(title: item.title, subtitle: item.subtitle, position: 0, url: item.url, isLiveStream: false, updateInterval: self.updateInterval)
+            updatePlayIndex(index: index)
+            self.flutterEventSink?(["name":"onPlayQueueItem", "index": index])
+        }
+    }
+    
+    private func updatePlayIndex(index: Int) {
+        currentMediaIndex = index
     }
     
     @objc func onComplete(_ notification: Notification) {
@@ -270,7 +349,9 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     
     private func setupRemoteTransportControls() {
-        
+        if self.isRemoteTransportControlsDidSetup {
+            return
+        }
         let commandCenter = MPRemoteCommandCenter.shared()
 
         // Add handler for Play Command
@@ -290,6 +371,24 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
             }
             return .commandFailed
         }
+        
+        commandCenter.nextTrackCommand.addTarget { event in
+            if self.mediaQueue.count - 1 > self.currentMediaIndex {
+                self.playQueueItem(index: self.currentMediaIndex + 1)
+                return .success
+            }
+            return .commandFailed
+        }
+        
+        commandCenter.previousTrackCommand.addTarget { event in
+            if self.mediaQueue.count > 0 {
+                self.playQueueItem(index: self.currentMediaIndex - 1)
+                return .success
+            }
+            return .commandFailed
+        }
+        
+        self.isRemoteTransportControlsDidSetup = true
     }
     
     private func setupNowPlayingInfoPanel(title:String, subtitle:String, isLiveStream:Bool) {
@@ -418,11 +517,11 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func updateInfoPanelOnPlay() {
         
-        self.nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = CMTimeGetSeconds(((self.audioPlayer.currentTime())))
+        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = CMTimeGetSeconds(((self.audioPlayer.currentTime())))
         
-        self.nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1
         
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = self.nowPlayingInfo
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
     
     private func updateInfoPanelOnComplete() {

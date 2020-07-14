@@ -6,14 +6,12 @@ import 'package:flutter/services.dart';
 /// [onPlay], [onPause] etc. See example on how to use.
 mixin PlayerObserver {
   Future<void> listenForVideoPlayerEvents(int viewId) async {
-    EventChannel eventChannel = EventChannel(
-        "tv.mta/NativeVideoPlayerEventChannel_$viewId", JSONMethodCodec());
+    EventChannel eventChannel = EventChannel("tv.mta/NativeVideoPlayerEventChannel_$viewId", JSONMethodCodec());
     eventChannel.receiveBroadcastStream().listen(_processEvent);
   }
 
   Future<void> listenForAudioPlayerEvents() async {
-    EventChannel eventChannel =
-        EventChannel("tv.mta/NativeAudioEventChannel", JSONMethodCodec());
+    EventChannel eventChannel = EventChannel("tv.mta/NativeAudioEventChannel", JSONMethodCodec());
     eventChannel.receiveBroadcastStream().listen(_processEvent);
   }
 
@@ -44,6 +42,8 @@ mixin PlayerObserver {
   /// Override this method to get errors thrown by the player
   void onError(String error) {/* user implementation */}
 
+  void onPlayQueueItem(int index) {/* user implementation */}
+
   void _processEvent(dynamic event) async {
     String eventName = event["name"];
 
@@ -67,6 +67,10 @@ mixin PlayerObserver {
       /* onTime */
       case "onTime":
         onTime(event["time"].toInt());
+        break;
+
+      case "onPlayQueueItem":
+        onPlayQueueItem(event["index"].toInt());
         break;
 
       /* onSeek */
