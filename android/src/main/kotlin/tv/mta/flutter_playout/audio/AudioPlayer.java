@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -30,7 +31,7 @@ import tv.mta.flutter_playout.MediaNotificationManagerService;
 
 public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
 
-    private final String TAG = "AudioPlayer";
+    private static final String TAG = "AudioPlayer";
 
     private AudioServiceBinder audioServiceBinder = null;
 
@@ -416,19 +417,21 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                     audioServiceBinder.getAudioPlayer() != null &&
                     !audioServiceBinder.isMediaChanging()) {
 
-                int newDuration = audioServiceBinder.getAudioPlayer().getDuration();
+                if (audioServiceBinder.isPlayerReady()) {
+                    int newDuration = audioServiceBinder.getAudioPlayer().getDuration();
 
-                if (newDuration != mediaDuration) {
+                    if (newDuration != mediaDuration) {
 
-                    mediaDuration = newDuration;
+                        mediaDuration = newDuration;
 
-                    JSONObject message = new JSONObject();
+                        JSONObject message = new JSONObject();
 
-                    message.put("name", "onDuration");
+                        message.put("name", "onDuration");
 
-                    message.put("duration", mediaDuration);
+                        message.put("duration", mediaDuration);
 
-                    eventSink.success(message);
+                        eventSink.success(message);
+                    }
                 }
             }
 
@@ -542,20 +545,23 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
                     try {
 
-                        int position = service.audioServiceBinder.getCurrentAudioPosition();
+                        if (service.audioServiceBinder.isPlayerReady()) {
+                            int position = service.audioServiceBinder.getCurrentAudioPosition();
 
-                        int duration = service.audioServiceBinder.getAudioPlayer().getDuration();
+                            int duration = service.audioServiceBinder.getAudioPlayer().getDuration();
 
-                        if (position <= duration) {
+                            if (position <= duration) {
 
-                            JSONObject message = new JSONObject();
+                                JSONObject message = new JSONObject();
 
-                            message.put("name", "onTime");
+                                message.put("name", "onTime");
 
-                            message.put("time",
-                                    service.audioServiceBinder.getCurrentAudioPosition() / 1000);
+                                message.put("time",
+                                        service.audioServiceBinder.getCurrentAudioPosition() / 1000);
 
-                            service.eventSink.success(message);
+                                service.eventSink.success(message);
+                            }
+
                         }
 
                     } catch (Exception e) { /* ignore */ }

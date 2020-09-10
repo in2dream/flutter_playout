@@ -23,7 +23,6 @@ import androidx.core.app.NotificationCompat;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
 import tv.mta.flutter_playout.FlutterAVPlayer;
 import tv.mta.flutter_playout.MediaItem;
@@ -60,7 +59,11 @@ public class AudioServiceBinder
     final int UPDATE_PLAYER_STATE_TO_ERROR = 6;
     final int UPDATE_AUDIO = 7;
 
-    private boolean isPlayerReady = false;
+    private boolean _playerReady = false;
+    public boolean isPlayerReady() {
+        return _playerReady;
+    }
+
     private boolean isBound = true;
 
     private boolean isMediaChanging = false;
@@ -173,7 +176,7 @@ public class AudioServiceBinder
 
     void seekAudio(int position) {
 
-        if (isPlayerReady) {
+        if (_playerReady) {
 
             audioPlayer.seekTo(position * 1000);
         }
@@ -254,6 +257,8 @@ public class AudioServiceBinder
 
         if (audioPlayer != null) {
 
+            _playerReady = false;
+
             if (audioPlayer.isPlaying()) {
 
                 audioPlayer.stop();
@@ -278,7 +283,7 @@ public class AudioServiceBinder
     }
 
     private void initAudioPlayer() {
-
+        Log.d(TAG, "InitAudioPlayer: " + getAudioFileUrl());
         try {
 
             if (audioPlayer == null) {
@@ -286,7 +291,6 @@ public class AudioServiceBinder
                 audioPlayer = new MediaPlayer();
 
                 if (!TextUtils.isEmpty(getAudioFileUrl())) {
-
                     audioPlayer.setDataSource(getAudioFileUrl());
                 }
 
@@ -299,8 +303,7 @@ public class AudioServiceBinder
                 audioPlayer.prepareAsync();
             }
 
-            else {
-
+            else if (isPlayerReady()) {
                 audioPlayer.start();
             }
 
@@ -349,7 +352,7 @@ public class AudioServiceBinder
     @Override
     public void onPrepared(MediaPlayer mp) {
 
-        isPlayerReady = true;
+        _playerReady = true;
 
         isBound = true;
 
