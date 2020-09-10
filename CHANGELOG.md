@@ -1,3 +1,25 @@
+## 1.0.40 [September 7, 2020]
+
+* added support for text tracks for Android
+* added text track change listener to player
+
+## 1.0.39 [September 7, 2020]
+
+* Added support for text tracks for Android
+
+## 1.0.38 [August 25, 2020]
+
+* Merged [PR](https://github.com/muslimtv/flutter_playout/pull/61)
+* fixes [#60](https://github.com/muslimtv/flutter_playout/issues/60)
+
+## 1.0.37 [August 4, 2020]
+
+* moved Akamai Media Analytics plugin to a separate branch
+
+## 1.0.36 [July 29, 2020]
+
+* implemented Akamai Media Analytics
+
 ## 1.0.35 [April 18, 2020]
 
 * Merged PR [#41](https://github.com/muslimtv/flutter_playout/pull/41)
