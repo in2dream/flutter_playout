@@ -232,10 +232,9 @@ public class AudioServiceBinder
     }
 
     void playQueueItemAtIndex(int index) {
-        try {
-            reset();
-
-        } catch (Exception e) { /* ignore */}
+        if (index == currentMediaIndex) {
+            return;
+        }
 
         setMediaChanging(true);
         setPlayIndex(index);
@@ -304,7 +303,14 @@ public class AudioServiceBinder
             }
 
             else if (isPlayerReady()) {
-                audioPlayer.start();
+
+                if (isMediaChanging) {
+                    audioPlayer.seekTo(0);
+                    audioPlayer.start();
+                } else if (!audioPlayer.isPlaying()) {
+                    audioPlayer.start();
+                }
+
             }
 
         } catch (IOException ex) {
@@ -517,7 +523,7 @@ public class AudioServiceBinder
     }
 
     private void updatePlaybackState(PlayerState playerState) {
-
+        Log.d(TAG, "Update Player State");
         if (mMediaSessionCompat == null) return;
 
         PlaybackStateCompat.Builder newPlaybackState = getPlaybackStateBuilder();
