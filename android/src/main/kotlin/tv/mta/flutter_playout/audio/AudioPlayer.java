@@ -546,21 +546,18 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                     try {
 
                         if (service.audioServiceBinder.isPlayerReady()) {
-                            int position = service.audioServiceBinder.getCurrentAudioPosition();
-
                             int duration = service.audioServiceBinder.getAudioPlayer().getDuration();
+                            int position = Math.min(duration, service.audioServiceBinder.getCurrentAudioPosition());
 
-                            if (position <= duration) {
+                            Log.d(TAG, "TIME::::" + position + " DURATION:::" + duration);
 
-                                JSONObject message = new JSONObject();
+                            JSONObject message = new JSONObject();
 
-                                message.put("name", "onTime");
+                            message.put("name", "onTime");
 
-                                message.put("time",
-                                        service.audioServiceBinder.getCurrentAudioPosition() / 1000);
+                            message.put("time", (int)Math.ceil(position / 1000.0));
 
-                                service.eventSink.success(message);
-                            }
+                            service.eventSink.success(message);
 
                         }
 

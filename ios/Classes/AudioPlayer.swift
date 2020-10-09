@@ -268,6 +268,11 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     @objc func onComplete(_ notification: Notification) {
         
+        // last position
+        let time = Int(ceil(self.audioPlayer.currentTime().seconds))
+        self.flutterEventSink?(["name":"onTime", "time": time])
+        updateInfoPanelOnTime()
+        
         pause()
         
         self.flutterEventSink?(["name":"onComplete"])

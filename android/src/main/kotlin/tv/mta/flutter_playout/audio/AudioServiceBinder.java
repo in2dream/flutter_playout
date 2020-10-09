@@ -256,8 +256,6 @@ public class AudioServiceBinder
 
         if (audioPlayer != null) {
 
-            _playerReady = false;
-
             if (audioPlayer.isPlaying()) {
 
                 audioPlayer.stop();
@@ -268,6 +266,8 @@ public class AudioServiceBinder
             audioPlayer = null;
 
             updatePlaybackState(PlayerState.COMPLETE);
+
+            _playerReady = false;
         }
     }
 
@@ -400,13 +400,7 @@ public class AudioServiceBinder
 
                         if (audioPlayer != null && audioPlayer.isPlaying()) {
 
-                            // Create update audio progress message.
-                            Message updateAudioProgressMsg = new Message();
-
-                            updateAudioProgressMsg.what = UPDATE_AUDIO_PROGRESS_BAR;
-
-                            // Send the message to caller activity's update audio progressbar Handler object.
-                            audioProgressUpdateHandler.sendMessage(updateAudioProgressMsg);
+                            _sendEventMessage(UPDATE_AUDIO_PROGRESS_BAR);
 
                             try {
 
@@ -448,17 +442,25 @@ public class AudioServiceBinder
         if (audioPlayer != null) {
 
             audioPlayer.pause();
+            // update progress bar for the last time
+            _sendEventMessage(UPDATE_AUDIO_PROGRESS_BAR);
 
             updatePlaybackState(PlayerState.PAUSED);
 
-            // Create update audio player state message.
-            Message updateAudioProgressMsg = new Message();
+            _sendEventMessage(UPDATE_PLAYER_STATE_TO_COMPLETE);
 
-            updateAudioProgressMsg.what = UPDATE_PLAYER_STATE_TO_COMPLETE;
-
-            // Send the message to caller activity's update audio Handler object.
-            audioProgressUpdateHandler.sendMessage(updateAudioProgressMsg);
+            audioPlayer.seekTo(0);
         }
+    }
+
+    private void _sendEventMessage(int event) {
+        // Create update audio progress message.
+        Message updateAudioProgressMsg = new Message();
+
+        updateAudioProgressMsg.what = event;
+
+        // Send the message to caller activity's update audio progressbar Handler object.
+        audioProgressUpdateHandler.sendMessage(updateAudioProgressMsg);
     }
 
     @Override
