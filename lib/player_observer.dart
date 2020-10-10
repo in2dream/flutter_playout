@@ -26,18 +26,18 @@ mixin PlayerObserver {
 
   /// Override this method to get update when playhead moves. This method
   /// fires every second with [position] as seconds.
-  void onTime(int position) {/* user implementation */}
+  void onTime(Duration position) {/* user implementation */}
 
   /// Override this method to get notifications when a seek operation has
   /// finished. This will occur when user finishes scrubbing media.
   /// [position] is position in seconds before seek started.
   /// [offset] is seconds after seek processed.
-  void onSeek(int position, double offset) {/* user implementation */}
+  void onSeek(Duration position, Duration offset) {/* user implementation */}
 
   /// Override this method to get notifications when media duration is
   /// set or changed.
   /// [duration] is in milliseconds. Returns -1 for live stream
-  void onDuration(int duration) {/* user implementation */}
+  void onDuration(Duration duration) {/* user implementation */}
 
   /// Override this method to get errors thrown by the player
   void onError(String error) {/* user implementation */}
@@ -66,7 +66,7 @@ mixin PlayerObserver {
 
       /* onTime */
       case "onTime":
-        onTime(event["time"].toInt());
+        onTime(Duration(milliseconds: event["time"].toInt()));
         break;
 
       case "onPlayQueueItem":
@@ -80,14 +80,14 @@ mixin PlayerObserver {
         int position = (event["position"]).toInt();
 
         /* requested position to seek to (in seconds) */
-        double offset = double.parse("${event["offset"]}");
+        int offset = int.parse("${event["offset"]}");
 
-        onSeek(position, offset);
+        onSeek(Duration(milliseconds: position), Duration(milliseconds: offset));
 
         break;
 
       case "onDuration":
-        onDuration((event["duration"]).toInt());
+        onDuration(Duration(milliseconds: (event["duration"]).toInt()));
         break;
 
       case "onError":

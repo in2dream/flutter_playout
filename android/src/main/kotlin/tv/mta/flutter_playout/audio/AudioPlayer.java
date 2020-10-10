@@ -555,7 +555,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
                             message.put("name", "onTime");
 
-                            message.put("time", (int)Math.ceil(position / 1000.0));
+                            message.put("time", position);
 
                             service.eventSink.success(message);
 

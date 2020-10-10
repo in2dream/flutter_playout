@@ -404,7 +404,7 @@ public class AudioServiceBinder
 
                             try {
 
-                                Thread.sleep(1000);
+                                Thread.sleep(100);
 
                             } catch (InterruptedException ex) { /* ignore */ }
 

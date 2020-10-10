@@ -32,7 +32,7 @@ class Audio {
       String subtitle = "",
       Duration position = Duration.zero,
       bool isLiveStream = false,
-      double updateInterval = 1.0}) async {
+      double updateInterval = 0.1}) async {
     if (_hasDataChanged(url, title, subtitle, position, isLiveStream)) {
       this._url = url;
       this._title = title;
@@ -45,7 +45,7 @@ class Audio {
         "subtitle": subtitle,
         "position": position.inMilliseconds,
         "isLiveStream": isLiveStream,
-        "updateInterval": updateInterval ?? 1.0
+        "updateInterval": updateInterval ?? 0.1
       });
     }
   }
@@ -75,9 +75,9 @@ class Audio {
         'setQueue', {'queue': items.map((MediaItem item) => item.toMap()).toList(), 'currentIndex': index});
   }
 
-  Future<void> seekTo(double seconds) async {
+  Future<void> seekTo(Duration position) async {
     return _audioChannel.invokeMethod("seekTo", <String, dynamic>{
-      "second": seconds,
+      "second": (position.inMilliseconds/1000.0).toDouble(),
     });
   }
 

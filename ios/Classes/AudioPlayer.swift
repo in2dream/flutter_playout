@@ -163,7 +163,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private var mediaQueue: [MediaItem] = []
     private var currentMediaIndex: Int = 0
-    private var updateInterval: Double = 1.0
+    private var updateInterval: Double = 0.1
     private var isRemoteTransportControlsDidSetup: Bool = false
     
     private var timeObserverToken:Any?
@@ -447,7 +447,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
             
             if (isCompleted) {
                 
-                self.flutterEventSink?(["name":"onSeek", "position":position, "offset":seconds])
+                self.flutterEventSink?(["name":"onSeek", "position": position * 1000, "offset":seconds * 1000])
             }
             
             self.updateInfoPanelOnPlay()
@@ -494,7 +494,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func onTimeInterval(time:CMTime) {
         
-        self.flutterEventSink?(["name":"onTime", "time":self.audioPlayer.currentTime().seconds])
+        self.flutterEventSink?(["name":"onTime", "time":self.audioPlayer.currentTime().seconds * 1000])
         
         updateInfoPanelOnTime()
         
