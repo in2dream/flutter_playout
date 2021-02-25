@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -105,10 +106,11 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
             audioServiceBinder.setAudioProgressUpdateHandler(audioProgressUpdateHandler);
 
-            audioServiceBinder.startAudio(startPositionInMills);
+            audioServiceBinder.startAudio(startPositionInMills, false);
 
             audioServiceBinder.setQueue(mediaQueue);
 
+            Log.d(TAG, "onServiceConnected" + currentMediaIndex);
             audioServiceBinder.setPlayIndex(currentMediaIndex);
 
             doBindMediaNotificationManagerService();
@@ -212,7 +214,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
                 try {
 
-                    audioServiceBinder.reset();
+                    //audioServiceBinder.reset();
 
                 } catch (Exception e) { /* ignore */}
 
@@ -251,7 +253,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
             audioServiceBinder.reset();
 
-            audioServiceBinder.cleanPlayerNotification();
+            //audioServiceBinder.cleanPlayerNotification();
 
             audioServiceBinder = null;
         }
@@ -380,11 +382,14 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             Log.d(TAG, "did set queue: " + queue.size());
 
             mediaQueue = queue;
-            currentMediaIndex = (int) args.get("currentIndex");
 
             if (audioServiceBinder != null) {
                 audioServiceBinder.setQueue(queue);
-                audioServiceBinder.setPlayIndex(currentMediaIndex);
+                if (args.containsKey("currentIndex")) {
+                    currentMediaIndex = (int) args.get("currentIndex");
+                    Log.d(TAG, "SetQueue(index:" + currentMediaIndex + ")");
+                    audioServiceBinder.setPlayIndex(currentMediaIndex);
+                }
             }
 
         } catch (Exception e) {
@@ -398,9 +403,12 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
         try {
 
             java.util.HashMap<String, Object> args = (java.util.HashMap<String, Object>) arguments;
-            currentMediaIndex = (int) args.get("index");
             if (audioServiceBinder != null) {
-                audioServiceBinder.setPlayIndex(currentMediaIndex);
+                if (((HashMap<String, Object>) arguments).containsKey("index")) {
+                    currentMediaIndex = (int) args.get("index");
+                    Log.d(TAG, "UpdatePlayIndex: " + currentMediaIndex);
+                    audioServiceBinder.setPlayIndex(currentMediaIndex);
+                }
             }
 
         } catch (Exception e) {
@@ -450,8 +458,9 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
         if (audioServiceBinder == null) {
 
             Intent intent = new Intent(this.context, AudioService.class);
-
             this.context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+            this.context.startService(intent);
         }
     }
 
@@ -549,7 +558,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                             int duration = service.audioServiceBinder.getAudioPlayer().getDuration();
                             int position = Math.min(duration, service.audioServiceBinder.getCurrentAudioPosition());
 
-                            Log.d(TAG, "TIME::::" + position + " DURATION:::" + duration);
+                            //Log.d(TAG, "TIME::::" + position + " DURATION:::" + duration);
 
                             JSONObject message = new JSONObject();
 
@@ -586,6 +595,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                 } else if (msg.what == service.audioServiceBinder.UPDATE_AUDIO) {
 
                     int index = msg.arg1;
+                    service.currentMediaIndex = index;
                     service.notifyDartOnPlayQueueItem(index);
                 }
             }

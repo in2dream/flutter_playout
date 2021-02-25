@@ -1,17 +1,21 @@
 package tv.mta.flutter_playout.audio;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.text.TextUtils;
@@ -29,6 +33,8 @@ import tv.mta.flutter_playout.MediaItem;
 import tv.mta.flutter_playout.PlayerNotificationUtil;
 import tv.mta.flutter_playout.PlayerState;
 import tv.mta.flutter_playout.R;
+
+import static tv.mta.flutter_playout.PlayerNotificationUtil.getActionIntent;
 
 public class AudioServiceBinder
         extends Binder
@@ -63,6 +69,7 @@ public class AudioServiceBinder
     public boolean isPlayerReady() {
         return _playerReady;
     }
+    private NotificationCompat.Builder _notificationBuilder;
 
     private boolean isBound = true;
 
@@ -98,6 +105,19 @@ public class AudioServiceBinder
     private Context context;
 
     private Activity activity;
+    private AudioService _service;
+
+    AudioServiceBinder(AudioService service) {
+        _service = service;
+    }
+
+    public AudioService getService() {
+        return _service;
+    }
+
+    public NotificationCompat.Builder getNotificationBuilder() {
+        return _notificationBuilder;
+    }
 
     MediaPlayer getAudioPlayer() {
         return audioPlayer;
@@ -153,6 +173,10 @@ public class AudioServiceBinder
     }
 
     void startAudio(int startPositionInMills) {
+        startAudio(startPositionInMills, true);
+    }
+
+    void startAudio(int startPositionInMills, boolean needUpdate) {
 
         this.startPositionInMills = startPositionInMills;
 
@@ -160,7 +184,7 @@ public class AudioServiceBinder
 
         if (audioPlayer != null && mMediaSessionCompat != null && mMediaSessionCompat.isActive()) {
 
-            updatePlaybackState(PlayerState.PLAYING);
+            updatePlaybackState(PlayerState.PLAYING, needUpdate);
 
             // Create update audio player state message.
             Message updateAudioProgressMsg = new Message();
@@ -237,6 +261,7 @@ public class AudioServiceBinder
         }
 
         setMediaChanging(true);
+        Log.d(TAG, "playQueueItemAtIndex" + index);
         setPlayIndex(index);
 
         MediaItem item = mediaQueue.get(index);
@@ -245,7 +270,6 @@ public class AudioServiceBinder
         setSubtitle(item.subtitle);
         startAudio(0);
 
-        // update audio
         Message updateAudioMsg = new Message();
         updateAudioMsg.what = UPDATE_AUDIO;
         updateAudioMsg.arg1 = index;
@@ -276,7 +300,6 @@ public class AudioServiceBinder
                 getContext().getSystemService(Context.NOTIFICATION_SERVICE);
 
         if (notificationManager != null) {
-
             notificationManager.cancel(NOTIFICATION_ID);
         }
     }
@@ -325,7 +348,7 @@ public class AudioServiceBinder
 
         try {
 
-            cleanPlayerNotification();
+            //cleanPlayerNotification();
 
             if (audioPlayer != null) {
 
@@ -377,9 +400,6 @@ public class AudioServiceBinder
         mMediaSessionCompat = new MediaSessionCompat(context,
                 AudioServiceBinder.class.getSimpleName(), receiver, null);
 
-        mMediaSessionCompat.setFlags(MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
-                | MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS);
-
         mMediaSessionCompat.setCallback(new MediaSessionCallback(audioPlayer));
 
         mMediaSessionCompat.setActive(true);
@@ -421,6 +441,7 @@ public class AudioServiceBinder
                         Message updateAudioDurationMsg = new Message();
 
                         updateAudioDurationMsg.what = UPDATE_AUDIO_DURATION;
+                        Log.d(TAG, "Running: " + audioPlayer.getAudioSessionId());
 
                         // Send the message to caller activity's update audio progressbar Handler object.
                         audioProgressUpdateHandler.sendMessage(updateAudioDurationMsg);
@@ -525,6 +546,10 @@ public class AudioServiceBinder
     }
 
     private void updatePlaybackState(PlayerState playerState) {
+        updatePlaybackState(playerState, true);
+    }
+
+    private void updatePlaybackState(PlayerState playerState, boolean needUpdate) {
         Log.d(TAG, "Update Player State");
         if (mMediaSessionCompat == null) return;
 
@@ -562,7 +587,7 @@ public class AudioServiceBinder
 
         mMediaSessionCompat.setPlaybackState(newPlaybackState.build());
 
-        updateNotification(capabilities);
+        updateNotification(capabilities, needUpdate);
     }
 
     private @PlaybackStateCompat.Actions
@@ -589,54 +614,79 @@ public class AudioServiceBinder
                 break;
         }
 
-        Log.d(TAG, "should support capabilities: " + mediaQueue.size() + " > 0");
+        Log.d(TAG, "should support capabilities: " + mediaQueue.size() + " currentIndex " + currentMediaIndex);
         if (mediaQueue.size() > 0) {
             if (!mReceivedError) {
-                Log.d(TAG, "add capabilities: skip next, skip prev");
-                capabilities |= PlaybackStateCompat.ACTION_SKIP_TO_NEXT
-                        | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS;
+                if (mediaQueue.size() - 1 > currentMediaIndex) {
+                    Log.d(TAG, "add capabilities: skip next");
+                    capabilities |= PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
+                }
+                if (currentMediaIndex > 0) {
+                    Log.d(TAG, "add capabilities: skip prev");
+                    capabilities |= PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS;
+                }
             }
         }
 
         return capabilities;
     }
 
-    private void updateNotification(long capabilities) {
+    @SuppressLint("RestrictedApi")
+    private void updateNotification(long capabilities, boolean needUpdate) {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             createNotificationChannel();
         }
 
-        NotificationCompat.Builder notificationBuilder = PlayerNotificationUtil.from(
-                activity, context, mMediaSessionCompat, mNotificationChannelId);
+        if (_notificationBuilder == null) {
+            _notificationBuilder = PlayerNotificationUtil.from(
+                    activity, context, mMediaSessionCompat, mNotificationChannelId);
+        } else {
+            MediaControllerCompat controller = mMediaSessionCompat.getController();
+            MediaMetadataCompat mediaMetadata = controller.getMetadata();
+            MediaDescriptionCompat description = mediaMetadata.getDescription();
+            int smallIcon = context.getResources().getIdentifier(
+                    "ic_notification_icon", "drawable", context.getPackageName());
+
+            _notificationBuilder.setContentTitle(description.getTitle())
+                    .setOngoing(true)
+                    .setContentText(description.getSubtitle())
+                    .setLargeIcon(description.getIconBitmap())
+                    .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                            .setMediaSession(mMediaSessionCompat.getSessionToken()))
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setSmallIcon(smallIcon)
+                    .setDeleteIntent(getActionIntent(context, KeyEvent.KEYCODE_MEDIA_STOP));
+            _notificationBuilder.mActions.clear();
+        }
 
         if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS) != 0) {
-            notificationBuilder.addAction(R.drawable.ic_skip_prev, "Skip to Previous",
-                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS));
+            _notificationBuilder.addAction(R.drawable.ic_skip_prev, "Skip to Previous",
+                    getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS));
         }
 
         if ((capabilities & PlaybackStateCompat.ACTION_PAUSE) != 0) {
-            notificationBuilder.addAction(R.drawable.ic_pause, "Pause",
-                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PAUSE));
+            _notificationBuilder.addAction(R.drawable.ic_pause, "Pause",
+                    getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PAUSE));
         }
 
         if ((capabilities & PlaybackStateCompat.ACTION_PLAY) != 0) {
-            notificationBuilder.addAction(R.drawable.ic_play, "Play",
-                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PLAY));
+            _notificationBuilder.addAction(R.drawable.ic_play, "Play",
+                    getActionIntent(context, KeyEvent.KEYCODE_MEDIA_PLAY));
         }
 
         if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_NEXT) != 0) {
-            notificationBuilder.addAction(R.drawable.ic_skip_next, "Skip to Next",
-                    PlayerNotificationUtil.getActionIntent(context, KeyEvent.KEYCODE_MEDIA_NEXT));
+            _notificationBuilder.addAction(R.drawable.ic_skip_next, "Skip to Next",
+                    getActionIntent(context, KeyEvent.KEYCODE_MEDIA_NEXT));
         }
 
         NotificationManager notificationManager = (NotificationManager)
                 context.getSystemService(Context.NOTIFICATION_SERVICE);
 
+        Notification n = _notificationBuilder.build();
         if (notificationManager != null) {
-
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+            notificationManager.notify(NOTIFICATION_ID, n);
         }
     }
 
@@ -660,7 +710,6 @@ public class AudioServiceBinder
         newChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
 
         if (notificationManager != null) {
-
             notificationManager.createNotificationChannel(newChannel);
         }
     }

@@ -3,9 +3,12 @@ package tv.mta.flutter_playout.audio;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 import android.view.KeyEvent;
 
 public class RemoteReceiver extends BroadcastReceiver {
+    static private final String TAG = "RemoteReceiver";
+
     @Override
     public void onReceive(Context context, Intent intent) {
 
