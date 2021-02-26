@@ -20,6 +20,7 @@ class Audio {
   String _subtitle;
   Duration _position;
   bool _isLiveStream;
+  String _cover;
 
   /// Plays given [url] with native player. The [title] and [subtitle]
   /// are used for lock screen info panel on both iOS & Android. Optionally pass
@@ -32,20 +33,23 @@ class Audio {
       String subtitle = "",
       Duration position = Duration.zero,
       bool isLiveStream = false,
-      double updateInterval = 0.1}) async {
+      double updateInterval = 0.1,
+      String cover = ""}) async {
     if (_hasDataChanged(url, title, subtitle, position, isLiveStream)) {
       this._url = url;
       this._title = title;
       this._subtitle = subtitle;
       this._position = position;
       this._isLiveStream = isLiveStream;
+      this._cover = cover;
       return _audioChannel.invokeMethod("play", <String, dynamic>{
         "url": url,
         "title": title,
         "subtitle": subtitle,
         "position": position.inMilliseconds,
         "isLiveStream": isLiveStream,
-        "updateInterval": updateInterval ?? 0.1
+        "updateInterval": updateInterval ?? 0.1,
+        "cover": cover,
       });
     }
   }
@@ -92,10 +96,11 @@ class MediaItem {
   final String subtitle;
   final String author;
   final String url;
+  final String cover;
 
-  MediaItem({this.title, this.subtitle, this.author, @required this.url});
+  MediaItem({this.title, this.subtitle, this.author, @required this.url, this.cover});
 
   Map<String, dynamic> toMap() {
-    return {'url': url, 'title': title ?? '', 'author': author ?? ''};
+    return {'url': url, 'title': title ?? '', 'author': author ?? '', 'cover': cover};
   }
 }

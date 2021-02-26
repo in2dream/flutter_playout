@@ -55,7 +55,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                             
                                 if let updateInterval = arguments["updateInterval"] as? Double {
                                     print("[IOS]setup called from flutter", position)
-                                    setup(title: title, subtitle: subtitle, position: position, url: audioURL, isLiveStream: isLiveStream, updateInterval: updateInterval)
+                                    setup(title: title, subtitle: subtitle, position: position, url: audioURL, isLiveStream: isLiveStream, updateInterval: updateInterval, cover: arguments["cover"] as? String)
                                 }
                             }
                           }
@@ -140,12 +140,14 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         var title: String;
         var subtitle: String;
         var author: String;
+        var cover: String;
         
-        private init(url: String, title: String?, subtitle: String?, author: String?) {
+        private init(url: String, title: String?, subtitle: String?, author: String?, cover: String?) {
             self.url = url
             self.title = title ?? ""
             self.subtitle = subtitle ?? ""
             self.author = title ?? ""
+            self.cover = cover ?? ""
         }
         
         static func fromDictionary(dict: NSDictionary) -> MediaItem {
@@ -153,7 +155,8 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                 url: dict["url"] as! String,
                 title: dict["title"] as? String ?? "",
                 subtitle: dict["subtitle"] as? String ?? "",
-                author: dict["author"] as? String ?? ""
+                author: dict["author"] as? String ?? "",
+                cover: dict["cover"] as? String
             );
         }
     }
@@ -185,7 +188,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         currentMediaIndex = currentIndex;
     }
     
-    private func setup(title:String, subtitle:String, position:Double, url: String?, isLiveStream:Bool, updateInterval:Double = 1.0) {
+    private func setup(title:String, subtitle:String, position:Double, url: String?, isLiveStream:Bool, updateInterval:Double = 1.0, cover: String?) {
         print("[IOS]setup", position)
         do {
             let audioSession = AVAudioSession.sharedInstance()
@@ -238,7 +241,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                         
                         setupRemoteTransportControls()
                         
-                        setupNowPlayingInfoPanel(title: title, subtitle: subtitle, isLiveStream: isLiveStream)
+                        setupNowPlayingInfoPanel(title: title, subtitle: subtitle, isLiveStream: isLiveStream, cover: cover)
                         print("[IOS] Seek from setup")
                         seekTo(seconds: position / 1000)
                         
@@ -409,7 +412,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         self.isRemoteTransportControlsDidSetup = true
     }
     
-    private func setupNowPlayingInfoPanel(title:String, subtitle:String, isLiveStream:Bool) {
+    private func setupNowPlayingInfoPanel(title:String, subtitle:String, isLiveStream:Bool, cover: String?) {
         
         nowPlayingInfo[MPMediaItemPropertyTitle] = title
         
@@ -424,6 +427,27 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = audioPlayer.currentItem?.asset.duration.seconds
 
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 0 // will be set to 1 by onTime callback
+    
+        if let image = cover {
+            if image.starts(with: "http") {
+                if let url = URL(string: image) {
+                    if let data = try? Data(contentsOf: url) {
+                        if let image = UIImage(data: data) {
+                            if #available(iOS 10.0, *) {
+                                let artwork = MPMediaItemArtwork(boundsSize: CGSize(width: 60, height: 60)) { (_) -> UIImage in
+                                    return image
+                                }
+                                nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+                            } else {
+                                // Fallback on earlier versions
+                            }
+                        }
+                    }
+                }
+            } else {
+                // TODO: load from file
+            }
+        }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }

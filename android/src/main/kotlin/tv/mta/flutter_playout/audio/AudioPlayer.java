@@ -51,6 +51,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
     private String title;
 
+    private String cover;
+
     private String subtitle;
 
     private int startPositionInMills;
@@ -103,6 +105,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             audioServiceBinder.setTitle(title);
 
             audioServiceBinder.setSubtitle(subtitle);
+
+            audioServiceBinder.setCover(cover);
 
             audioServiceBinder.setAudioProgressUpdateHandler(audioProgressUpdateHandler);
 
@@ -202,6 +206,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
         this.subtitle = (String) args.get("subtitle");
 
+        this.cover = (String) args.get("cover");
+
         try {
 
             this.startPositionInMills = (int) args.get("position");
@@ -228,6 +234,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             audioServiceBinder.setSubtitle(this.subtitle);
 
             audioServiceBinder.startAudio(startPositionInMills);
+
+            audioServiceBinder.setCover(this.cover);
 
         } else {
 
@@ -376,7 +384,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                         (String)item.get("title"),
                         (String)item.get("subtitle"),
                         (String)item.get("url"),
-                        (String)item.get("author"))
+                        (String)item.get("author"),
+                        (String)item.get("cover"))
                 );
             }
             Log.d(TAG, "did set queue: " + queue.size());

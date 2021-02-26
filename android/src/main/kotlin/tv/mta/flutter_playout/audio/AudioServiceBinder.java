@@ -8,11 +8,17 @@ import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
+import android.os.StrictMode;
+import android.provider.MediaStore;
 import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
@@ -25,7 +31,12 @@ import android.view.KeyEvent;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 
 import tv.mta.flutter_playout.FlutterAVPlayer;
@@ -89,6 +100,8 @@ public class AudioServiceBinder
 
     private String subtitle;
 
+    private String cover;
+
     private MediaPlayer audioPlayer = null;
 
     private int startPositionInMills = 0;
@@ -139,6 +152,8 @@ public class AudioServiceBinder
         this.subtitle = subtitle;
     }
 
+    void setCover(String cover) { this.cover = cover; }
+
     void setAudioProgressUpdateHandler(Handler audioProgressUpdateHandler) {
         this.audioProgressUpdateHandler = audioProgressUpdateHandler;
     }
@@ -167,6 +182,7 @@ public class AudioServiceBinder
         MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, title)
                 .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, subtitle)
+                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, cover)
                 .build();
 
         mMediaSessionCompat.setMetadata(metadata);
@@ -268,6 +284,7 @@ public class AudioServiceBinder
         setAudioFileUrl(item.url);
         setTitle(item.title);
         setSubtitle(item.subtitle);
+        setCover(item.cover);
         startAudio(0);
 
         Message updateAudioMsg = new Message();
@@ -441,7 +458,6 @@ public class AudioServiceBinder
                         Message updateAudioDurationMsg = new Message();
 
                         updateAudioDurationMsg.what = UPDATE_AUDIO_DURATION;
-                        Log.d(TAG, "Running: " + audioPlayer.getAudioSessionId());
 
                         // Send the message to caller activity's update audio progressbar Handler object.
                         audioProgressUpdateHandler.sendMessage(updateAudioDurationMsg);
@@ -642,24 +658,43 @@ public class AudioServiceBinder
         if (_notificationBuilder == null) {
             _notificationBuilder = PlayerNotificationUtil.from(
                     activity, context, mMediaSessionCompat, mNotificationChannelId);
-        } else {
-            MediaControllerCompat controller = mMediaSessionCompat.getController();
-            MediaMetadataCompat mediaMetadata = controller.getMetadata();
-            MediaDescriptionCompat description = mediaMetadata.getDescription();
-            int smallIcon = context.getResources().getIdentifier(
-                    "ic_notification_icon", "drawable", context.getPackageName());
-
-            _notificationBuilder.setContentTitle(description.getTitle())
-                    .setOngoing(true)
-                    .setContentText(description.getSubtitle())
-                    .setLargeIcon(description.getIconBitmap())
-                    .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                            .setMediaSession(mMediaSessionCompat.getSessionToken()))
-                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                    .setSmallIcon(smallIcon)
-                    .setDeleteIntent(getActionIntent(context, KeyEvent.KEYCODE_MEDIA_STOP));
-            _notificationBuilder.mActions.clear();
         }
+
+        MediaControllerCompat controller = mMediaSessionCompat.getController();
+        MediaMetadataCompat mediaMetadata = controller.getMetadata();
+        MediaDescriptionCompat description = mediaMetadata.getDescription();
+        int smallIcon = context.getResources().getIdentifier(
+                "ic_notification_icon", "drawable", context.getPackageName());
+
+        _notificationBuilder.setContentTitle(description.getTitle())
+                .setOngoing(true)
+                .setContentText(description.getSubtitle())
+                .setLargeIcon(description.getIconBitmap())
+                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                        .setMediaSession(mMediaSessionCompat.getSessionToken()))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setSmallIcon(smallIcon)
+                .setDeleteIntent(getActionIntent(context, KeyEvent.KEYCODE_MEDIA_STOP));
+
+        if (cover != null && !cover.isEmpty()) {
+            Log.d(TAG, "Set art image: " + cover);
+            if (cover.startsWith("http")) {
+                StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+                StrictMode.setThreadPolicy(policy);
+                try {
+                    URL url = new URL(cover);
+                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                    connection.setDoInput(true);
+                    connection.connect();
+                    InputStream input = connection.getInputStream();
+                    Bitmap bm = BitmapFactory.decodeStream(input);
+                    _notificationBuilder.setLargeIcon(bm);
+                } catch (IOException e) {
+                    Log.e(TAG, e.getMessage());
+                }
+            }
+        }
+        _notificationBuilder.mActions.clear();
 
         if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS) != 0) {
             _notificationBuilder.addAction(R.drawable.ic_skip_prev, "Skip to Previous",

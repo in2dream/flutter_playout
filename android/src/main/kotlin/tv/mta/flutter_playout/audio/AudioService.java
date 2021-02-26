@@ -15,12 +15,6 @@ public class AudioService extends Service {
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "on Start COMMAND !!!!");
-        return super.onStartCommand(intent, flags, startId);
-    }
-
-    @Override
     public IBinder onBind(Intent intent) {
         return audioServiceBinder;
     }
