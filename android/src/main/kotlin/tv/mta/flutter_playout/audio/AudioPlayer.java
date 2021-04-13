@@ -110,6 +110,8 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
             audioServiceBinder.setAudioProgressUpdateHandler(audioProgressUpdateHandler);
 
+            audioServiceBinder.setPlayIndex(currentMediaIndex);
+
             audioServiceBinder.startAudio(startPositionInMills, false);
 
             audioServiceBinder.setQueue(mediaQueue);
@@ -233,12 +235,14 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
             audioServiceBinder.setSubtitle(this.subtitle);
 
-            audioServiceBinder.startAudio(startPositionInMills);
-
             audioServiceBinder.setCover(this.cover);
 
-        } else {
+            audioServiceBinder.setPlayIndex(currentMediaIndex);
 
+            audioServiceBinder.startAudio(startPositionInMills, mediaChanged);
+
+        } else {
+            Log.d(TAG, "Bind Audio Service");
             bindAudioService();
         }
 
@@ -394,9 +398,12 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
 
             if (audioServiceBinder != null) {
                 audioServiceBinder.setQueue(queue);
-                if (args.containsKey("currentIndex")) {
-                    currentMediaIndex = (int) args.get("currentIndex");
-                    Log.d(TAG, "SetQueue(index:" + currentMediaIndex + ")");
+            }
+
+            if (args.containsKey("currentIndex")) {
+                currentMediaIndex = (int) args.get("currentIndex");
+                Log.d(TAG, "SetQueue(index:" + currentMediaIndex + ")");
+                if (audioServiceBinder != null) {
                     audioServiceBinder.setPlayIndex(currentMediaIndex);
                 }
             }
@@ -469,7 +476,11 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             Intent intent = new Intent(this.context, AudioService.class);
             this.context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
 
-            this.context.startService(intent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                this.context.startForegroundService(intent);
+            } else {
+                this.context.startService(intent);
+            }
         }
     }
 

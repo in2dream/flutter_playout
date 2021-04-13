@@ -18,33 +18,35 @@ public class RemoteReceiver extends BroadcastReceiver {
 
                 final KeyEvent event = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
 
-                if (event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event != null) {
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) {
 
-                    switch (event.getKeyCode()) {
+                        switch (event.getKeyCode()) {
 
-                        case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                            case KeyEvent.KEYCODE_MEDIA_PAUSE:
 
-                            AudioServiceBinder.service.pauseAudio();
+                                AudioServiceBinder.service.pauseAudio();
 
-                            break;
+                                break;
 
-                        case KeyEvent.KEYCODE_MEDIA_PLAY:
+                            case KeyEvent.KEYCODE_MEDIA_PLAY:
 
-                            AudioServiceBinder.service.startAudio(0);
+                                AudioServiceBinder.service.startAudio(0, true);
 
-                            break;
+                                break;
 
-                        case KeyEvent.KEYCODE_MEDIA_NEXT:
+                            case KeyEvent.KEYCODE_MEDIA_NEXT:
 
-                            AudioServiceBinder.service.nextTrack();
+                                AudioServiceBinder.service.nextTrack();
 
-                            break;
+                                break;
 
-                        case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
 
-                            AudioServiceBinder.service.prevTrack();
+                                AudioServiceBinder.service.prevTrack();
 
-                            break;
+                                break;
+                        }
                     }
                 }
             }

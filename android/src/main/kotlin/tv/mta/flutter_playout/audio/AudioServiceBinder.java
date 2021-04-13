@@ -65,7 +65,7 @@ public class AudioServiceBinder
     /**
      * The notification id.
      */
-    private static final int NOTIFICATION_ID = 0;
+    public static final int NOTIFICATION_ID = 1;
     static AudioServiceBinder service;
     // This is the message signal that inform audio progress updater to update audio progress.
     final int UPDATE_AUDIO_PROGRESS_BAR = 1;
@@ -100,6 +100,8 @@ public class AudioServiceBinder
 
     private String subtitle;
 
+    private Bitmap artwork;
+
     private String cover;
 
     private MediaPlayer audioPlayer = null;
@@ -118,14 +120,15 @@ public class AudioServiceBinder
     private Context context;
 
     private Activity activity;
-    private AudioService _service;
+
+    private AudioService theService;
 
     AudioServiceBinder(AudioService service) {
-        _service = service;
+        theService = service;
     }
 
     public AudioService getService() {
-        return _service;
+        return theService;
     }
 
     public NotificationCompat.Builder getNotificationBuilder() {
@@ -179,28 +182,35 @@ public class AudioServiceBinder
     }
 
     private void setAudioMetadata() {
-        MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
+        MediaMetadataCompat.Builder builder = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, title)
                 .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, subtitle)
-                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, cover)
-                .build();
+                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, cover);
 
+        if (_playerReady && audioPlayer.getDuration() > 0) {
+            Log.d(TAG, "Set metadata duration: " + audioPlayer.getDuration());
+            builder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, audioPlayer.getDuration());
+        }
+        if (artwork != null) {
+            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork);
+        }
+        MediaMetadataCompat metadata = builder.build();
         mMediaSessionCompat.setMetadata(metadata);
     }
 
     void startAudio(int startPositionInMills) {
-        startAudio(startPositionInMills, true);
+        startAudio(startPositionInMills, false);
     }
 
-    void startAudio(int startPositionInMills, boolean needUpdate) {
-
+    void startAudio(int startPositionInMills, boolean startForeground) {
+        Log.d(TAG, "Start Audio: " + startPositionInMills + ", startForeground: " + startForeground);
         this.startPositionInMills = startPositionInMills;
 
         initAudioPlayer();
 
         if (audioPlayer != null && mMediaSessionCompat != null && mMediaSessionCompat.isActive()) {
 
-            updatePlaybackState(PlayerState.PLAYING, needUpdate);
+            updatePlaybackState(PlayerState.PLAYING, startForeground);
 
             // Create update audio player state message.
             Message updateAudioProgressMsg = new Message();
@@ -215,9 +225,7 @@ public class AudioServiceBinder
     }
 
     void seekAudio(int position) {
-
         if (_playerReady) {
-
             audioPlayer.seekTo(position * 1000);
         }
     }
@@ -257,16 +265,18 @@ public class AudioServiceBinder
 
     void nextTrack() {
         if (audioPlayer != null) {
-            if (mediaQueue.size() - 1 > currentMediaIndex) {
-                playQueueItemAtIndex(currentMediaIndex + 1);
+            final int nextIndex = currentMediaIndex + 1;
+            if (mediaQueue.size() > nextIndex) {
+                playQueueItemAtIndex(nextIndex);
             }
         }
     }
 
     void prevTrack() {
         if (audioPlayer != null) {
-            if (currentMediaIndex > 0) {
-                playQueueItemAtIndex(currentMediaIndex - 1);
+            final int prevIndex = currentMediaIndex - 1;
+            if (prevIndex >= 0) {
+                playQueueItemAtIndex(prevIndex);
             }
         }
     }
@@ -276,16 +286,8 @@ public class AudioServiceBinder
             return;
         }
 
-        setMediaChanging(true);
         Log.d(TAG, "playQueueItemAtIndex" + index);
         setPlayIndex(index);
-
-        MediaItem item = mediaQueue.get(index);
-        setAudioFileUrl(item.url);
-        setTitle(item.title);
-        setSubtitle(item.subtitle);
-        setCover(item.cover);
-        startAudio(0);
 
         Message updateAudioMsg = new Message();
         updateAudioMsg.what = UPDATE_AUDIO;
@@ -325,32 +327,35 @@ public class AudioServiceBinder
         Log.d(TAG, "InitAudioPlayer: " + getAudioFileUrl());
         try {
 
+            boolean isInit = false;
             if (audioPlayer == null) {
-
+                isInit = true;
                 audioPlayer = new MediaPlayer();
-
-                if (!TextUtils.isEmpty(getAudioFileUrl())) {
-                    audioPlayer.setDataSource(getAudioFileUrl());
-                }
 
                 audioPlayer.setOnPreparedListener(this);
 
                 audioPlayer.setOnCompletionListener(this);
 
                 audioPlayer.setOnErrorListener(this);
-
-                audioPlayer.prepareAsync();
             }
 
-            else if (isPlayerReady()) {
-
-                if (isMediaChanging) {
-                    audioPlayer.seekTo(0);
-                    audioPlayer.start();
-                } else if (!audioPlayer.isPlaying()) {
-                    audioPlayer.start();
+            if (isMediaChanging || isInit) {
+                Log.d(TAG, "Media is changing");
+                if (isPlayerReady()) {
+                    if (audioPlayer.isPlaying()) {
+                        audioPlayer.stop();
+                    }
                 }
 
+                if (!TextUtils.isEmpty(getAudioFileUrl())) {
+                    isBound = false;
+                    _playerReady = false;
+                    audioPlayer.reset();
+                    audioPlayer.setDataSource(getAudioFileUrl());
+                    audioPlayer.prepareAsync();
+                }
+            } else {
+                audioPlayer.start();
             }
 
         } catch (IOException ex) {
@@ -361,6 +366,7 @@ public class AudioServiceBinder
     @Override
     public void onDestroy() {
 
+        Log.d(TAG, "Destroy");
         isBound = false;
 
         try {
@@ -395,6 +401,40 @@ public class AudioServiceBinder
         return ret;
     }
 
+    protected void updateNotificationProgress() {
+        if (_notificationBuilder != null) {
+            if (_playerReady) {
+                if (audioPlayer.getDuration() > 0) {
+                    Log.d(TAG, "Progress: " + audioPlayer.getDuration() + "/" + audioPlayer.getCurrentPosition());
+                    _notificationBuilder.setProgress(audioPlayer.getDuration(), audioPlayer.getCurrentPosition(), false);
+                } else {
+                    _notificationBuilder.setProgress(100, 100, false);
+                }
+            } else {
+                _notificationBuilder.setProgress(100, 0, false);
+            }
+        }
+    }
+
+    protected void reflectNotificationUpdate() {
+        reflectNotificationUpdate(false);
+    }
+
+    protected void reflectNotificationUpdate(boolean startForeground) {
+        NotificationManager notificationManager = (NotificationManager)
+                context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        Notification n = _notificationBuilder.build();
+
+        if (startForeground) {
+            theService.startForeground(NOTIFICATION_ID, n);
+        }
+
+        if (notificationManager != null) {
+            notificationManager.notify(NOTIFICATION_ID, n);
+        }
+    }
+
     @Override
     public void onPrepared(MediaPlayer mp) {
 
@@ -421,6 +461,27 @@ public class AudioServiceBinder
 
         mMediaSessionCompat.setActive(true);
 
+        if (cover != null && !cover.isEmpty()) {
+            Log.d(TAG, "Set art image: " + cover);
+            if (cover.startsWith("http")) {
+                StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+                StrictMode.setThreadPolicy(policy);
+                try {
+                    URL url = new URL(cover);
+                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                    connection.setDoInput(true);
+                    connection.connect();
+                    InputStream input = connection.getInputStream();
+                    artwork = BitmapFactory.decodeStream(input);
+                } catch (IOException e) {
+                    Log.e(TAG, e.getMessage());
+                    artwork = null;
+                }
+            } else {
+                artwork = null;
+            }
+        }
+
         setAudioMetadata();
 
         updatePlaybackState(PlayerState.PLAYING);
@@ -438,6 +499,8 @@ public class AudioServiceBinder
                         if (audioPlayer != null && audioPlayer.isPlaying()) {
 
                             _sendEventMessage(UPDATE_AUDIO_PROGRESS_BAR);
+//                            updateNotificationProgress();
+//                            reflectNotificationUpdate();
 
                             try {
 
@@ -467,6 +530,8 @@ public class AudioServiceBinder
                         Log.e(TAG, "onPrepared:updateAudioProgressThread: ", e);
                     }
                 }
+
+                Log.d(TAG, "Stop loop");
             }
         };
 
@@ -565,7 +630,7 @@ public class AudioServiceBinder
         updatePlaybackState(playerState, true);
     }
 
-    private void updatePlaybackState(PlayerState playerState, boolean needUpdate) {
+    private void updatePlaybackState(PlayerState playerState, boolean startForeground) {
         Log.d(TAG, "Update Player State");
         if (mMediaSessionCompat == null) return;
 
@@ -603,12 +668,12 @@ public class AudioServiceBinder
 
         mMediaSessionCompat.setPlaybackState(newPlaybackState.build());
 
-        updateNotification(capabilities, needUpdate);
+        updateNotification(capabilities, startForeground);
     }
 
     private @PlaybackStateCompat.Actions
     long getCapabilities(PlayerState playerState) {
-        long capabilities = 0;
+        long capabilities = PlaybackStateCompat.ACTION_SEEK_TO;
 
         switch (playerState) {
             case PLAYING:
@@ -648,7 +713,7 @@ public class AudioServiceBinder
     }
 
     @SuppressLint("RestrictedApi")
-    private void updateNotification(long capabilities, boolean needUpdate) {
+    private void updateNotification(long capabilities, boolean startForeground) {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
@@ -676,24 +741,7 @@ public class AudioServiceBinder
                 .setSmallIcon(smallIcon)
                 .setDeleteIntent(getActionIntent(context, KeyEvent.KEYCODE_MEDIA_STOP));
 
-        if (cover != null && !cover.isEmpty()) {
-            Log.d(TAG, "Set art image: " + cover);
-            if (cover.startsWith("http")) {
-                StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-                StrictMode.setThreadPolicy(policy);
-                try {
-                    URL url = new URL(cover);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setDoInput(true);
-                    connection.connect();
-                    InputStream input = connection.getInputStream();
-                    Bitmap bm = BitmapFactory.decodeStream(input);
-                    _notificationBuilder.setLargeIcon(bm);
-                } catch (IOException e) {
-                    Log.e(TAG, e.getMessage());
-                }
-            }
-        }
+        //updateNotificationProgress();
         _notificationBuilder.mActions.clear();
 
         if ((capabilities & PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS) != 0) {
@@ -716,13 +764,7 @@ public class AudioServiceBinder
                     getActionIntent(context, KeyEvent.KEYCODE_MEDIA_NEXT));
         }
 
-        NotificationManager notificationManager = (NotificationManager)
-                context.getSystemService(Context.NOTIFICATION_SERVICE);
-
-        Notification n = _notificationBuilder.build();
-        if (notificationManager != null) {
-            notificationManager.notify(NOTIFICATION_ID, n);
-        }
+        reflectNotificationUpdate(startForeground);
     }
 
     @RequiresApi(Build.VERSION_CODES.O)

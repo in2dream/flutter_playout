@@ -258,9 +258,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     
     private func playQueueItem(index: Int) {
-        if index >= 0 && mediaQueue.count - 1 > index {
-            //let item = mediaQueue[index]
-            //setup(title: item.title, subtitle: item.subtitle, position: 0, url: item.url, isLiveStream: false, updateInterval: self.updateInterval)
+        if index >= 0 && mediaQueue.count > index {
             updatePlayIndex(index: index)
             self.flutterEventSink?(["name":"onPlayQueueItem", "index": index])
         }

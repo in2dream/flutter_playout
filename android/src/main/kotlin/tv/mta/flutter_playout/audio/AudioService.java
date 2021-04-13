@@ -11,8 +11,7 @@ public class AudioService extends Service {
     static private final String TAG = "AudioService";
     private AudioServiceBinder audioServiceBinder = new AudioServiceBinder(this);
 
-    public AudioService() {
-    }
+    public AudioService() {}
 
     @Override
     public IBinder onBind(Intent intent) {
