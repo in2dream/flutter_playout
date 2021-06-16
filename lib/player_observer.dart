@@ -80,7 +80,7 @@ mixin PlayerObserver {
         int position = (event["position"]).toInt();
 
         /* requested position to seek to (in seconds) */
-        int offset = int.parse("${event["offset"]}");
+        int offset = (event["offset"]).toInt();
 
         onSeek(Duration(milliseconds: position), Duration(milliseconds: offset));
 

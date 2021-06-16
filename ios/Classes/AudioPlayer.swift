@@ -89,7 +89,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
           if let arguments = call.arguments as? NSDictionary {
               
               if let seekToSecond = arguments["second"] as? Double {
-                  print("[IOS] Seek called from flutter")
+                  print("[IOS] Seek called from flutter: ", seekToSecond)
                   seekTo(seconds: seekToSecond)
               }
           }
@@ -243,8 +243,9 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                         
                         setupNowPlayingInfoPanel(title: title, subtitle: subtitle, isLiveStream: isLiveStream, cover: cover)
                         print("[IOS] Seek from setup")
-                        seekTo(seconds: position / 1000)
                         
+                        isSeeking = false
+                        seekTo(seconds: position / 1000)
                     }
                     
                     audioPlayer.play()
@@ -314,11 +315,11 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
                 
                 switch (p.timeControlStatus) {
                 
-                case AVPlayerTimeControlStatus.paused:
+                case AVPlayer.TimeControlStatus.paused:
                     self.flutterEventSink?(["name":"onPause"])
                     break
                 
-                case AVPlayerTimeControlStatus.playing:
+                case AVPlayer.TimeControlStatus.playing:
                     self.flutterEventSink?(["name":"onPlay"])
                     break
                 
@@ -474,6 +475,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func seekTo(seconds:Double) {
         if (isSeeking) {
+            print("[IOS]Still seeking")
             return
         }
         isSeeking = true
@@ -503,6 +505,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         
         /* reset state */
         self.mediaURL = ""
+        self.isSeeking = false
         
         onDurationChange()
         
@@ -524,6 +527,7 @@ class AudioPlayer: NSObject, FlutterPlugin, FlutterStreamHandler {
         /* reset state */
         self.mediaURL = ""
         self.mediaDuration = 0.0
+        self.isSeeking = false
         
         NotificationCenter.default.removeObserver(self)
         

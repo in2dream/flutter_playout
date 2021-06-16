@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -75,6 +76,7 @@ public class AudioServiceBinder
     final int UPDATE_AUDIO_DURATION = 5;
     final int UPDATE_PLAYER_STATE_TO_ERROR = 6;
     final int UPDATE_AUDIO = 7;
+    final int UPDATE_AUDIO_SEEK_TO = 8;
 
     private boolean _playerReady = false;
     public boolean isPlayerReady() {
@@ -227,6 +229,18 @@ public class AudioServiceBinder
     void seekAudio(int position) {
         if (_playerReady) {
             audioPlayer.seekTo(position * 1000);
+            if (audioPlayer.isPlaying()) {
+                updatePlaybackState(PlayerState.PLAYING, false);
+            }
+
+            // Create update audio player state message.
+            Message updateAudioProgressMsg = new Message();
+
+            updateAudioProgressMsg.what = UPDATE_AUDIO_SEEK_TO;
+            updateAudioProgressMsg.arg1 = position;
+
+            // Send the message to caller activity's update audio Handler object.
+            audioProgressUpdateHandler.sendMessage(updateAudioProgressMsg);
         }
     }
 
@@ -315,12 +329,14 @@ public class AudioServiceBinder
     }
 
     void cleanPlayerNotification() {
-        NotificationManager notificationManager = (NotificationManager)
-                getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        try {
+            NotificationManager notificationManager = (NotificationManager)
+                    context.getSystemService(Context.NOTIFICATION_SERVICE);
 
-        if (notificationManager != null) {
+            theService.stopForeground(false);
             notificationManager.cancel(NOTIFICATION_ID);
-        }
+
+        } catch (Exception e) { /* ignore */ }
     }
 
     private void initAudioPlayer() {
@@ -370,6 +386,8 @@ public class AudioServiceBinder
         isBound = false;
 
         try {
+
+            //theService.stopForeground(false);
 
             //cleanPlayerNotification();
 
@@ -544,6 +562,7 @@ public class AudioServiceBinder
         if (audioPlayer != null) {
 
             audioPlayer.pause();
+
             // update progress bar for the last time
             _sendEventMessage(UPDATE_AUDIO_PROGRESS_BAR);
 
@@ -802,22 +821,31 @@ public class AudioServiceBinder
 
         @Override
         public void onPause() {
-            audioPlayer.pause();
+            if (audioPlayer != null) {
+                audioPlayer.pause();
+            }
         }
 
         @Override
         public void onPlay() {
-            audioPlayer.start();
+            if (audioPlayer != null) {
+                audioPlayer.start();
+            }
         }
 
         @Override
         public void onSeekTo(long pos) {
-            audioPlayer.seekTo((int) pos);
+            if (audioPlayer != null) {
+                audioPlayer.seekTo((int) pos);
+                updatePlaybackState(PlayerState.PLAYING, false);
+            }
         }
 
         @Override
         public void onStop() {
-            audioPlayer.stop();
+            if (audioPlayer != null) {
+                audioPlayer.stop();
+            }
         }
     }
 }

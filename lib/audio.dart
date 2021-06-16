@@ -81,13 +81,13 @@ class Audio {
 
   Future<void> seekTo(Duration position) async {
     return _audioChannel.invokeMethod("seekTo", <String, dynamic>{
-      "second": (position.inMilliseconds/1000.0).toDouble(),
+      "second": (position.inMilliseconds / 1000.0).toDouble(),
     });
   }
 
-  Future<void> dispose() async {
+  Future<void> dispose({bool clearNotification = false}) async {
     _instance = null;
-    await _audioChannel.invokeMethod("dispose");
+    await _audioChannel.invokeMethod("dispose", <String, dynamic>{"clearNotification": clearNotification});
   }
 }
 

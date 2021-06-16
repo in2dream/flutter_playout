@@ -260,15 +260,23 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
     }
 
     private void reset() {
+        reset(false);
+    }
+
+    private void reset(boolean clearNotification) {
+        Log.d(TAG, "■■■■■■■■■■■■■■■■■■■■■■■■■ CALLED reset");
 
         if (audioServiceBinder != null) {
 
             audioServiceBinder.reset();
 
-            //audioServiceBinder.cleanPlayerNotification();
+            if (clearNotification) {
+                audioServiceBinder.cleanPlayerNotification();
+            }
 
             audioServiceBinder = null;
         }
+
     }
 
     private void notifyDartOnPlay() {
@@ -353,6 +361,25 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
             Log.e(TAG, "notifyDartOnError: ", e);
         }
     }
+
+    private void notifyDartOnSeek(int pos, int offset) {
+
+        try {
+
+            JSONObject message = new JSONObject();
+
+            message.put("name", "onSeek");
+            message.put("position", pos);
+            message.put("offset", offset);
+
+            eventSink.success(message);
+
+        } catch (Exception e) {
+
+            Log.e(TAG, "notifyDartOnSeek: ", e);
+        }
+    }
+
 
     private void seekTo(Object arguments) {
 
@@ -488,12 +515,20 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
      * Unbound background audio service with caller activity.
      */
     private void unBoundAudioService() {
+        unBoundAudioService(false);
+    }
+
+    /**
+     * Unbound background audio service with caller activity.
+     */
+    private void unBoundAudioService(boolean clearNotification) {
 
         if (audioServiceBinder != null) {
 
             this.context.unbindService(serviceConnection);
 
-            reset();
+            reset(clearNotification);
+
         }
     }
 
@@ -530,7 +565,7 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                 result.success(true);
                 break;
             case "dispose": {
-                onDestroy();
+                onDestroy(call.arguments);
                 result.success(true);
                 break;
             }
@@ -544,6 +579,24 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
         try {
 
             unBoundAudioService();
+
+            doUnbindMediaNotificationManagerService();
+
+            /* reset media duration */
+            mediaDuration = 0;
+
+        } catch (Exception e) { /* ignore */ }
+    }
+
+    private void onDestroy(Object arguments) {
+
+        try {
+
+            java.util.HashMap<String, Object> args = (java.util.HashMap<String, Object>) arguments;
+
+            boolean clearNotification = (boolean)args.get("clearNotification");
+
+            unBoundAudioService(clearNotification);
 
             doUnbindMediaNotificationManagerService();
 
@@ -617,6 +670,15 @@ public class AudioPlayer implements MethodChannel.MethodCallHandler, EventChanne
                     int index = msg.arg1;
                     service.currentMediaIndex = index;
                     service.notifyDartOnPlayQueueItem(index);
+
+                } else if (msg.what == service.audioServiceBinder.UPDATE_AUDIO_SEEK_TO) {
+                    try {
+                        if (service.audioServiceBinder.isPlayerReady()) {
+                            int offset = msg.arg1;
+                            int position = service.audioServiceBinder.getCurrentAudioPosition();
+                            service.notifyDartOnSeek(position, offset);
+                        }
+                    } catch (Exception e) {}
                 }
             }
         }
